@@ -4,7 +4,7 @@ services:
     container_name: messagerie_server
     restart: always
     ports:
-      - "8080:8080"
+      - "8085:8080"
     volumes:
       # Map the container's data folder to a local 'server_data' folder on your host
       - ./server_data:/app/data
