@@ -28,6 +28,7 @@ echo "📋 Copying files..."
 cp bin/client_linux_amd64 "dist/$RELEASE_NAME/bin/"
 cp install.sh "dist/$RELEASE_NAME/"
 cp uninstall.sh "dist/$RELEASE_NAME/"
+cp doc/README_CLIENT.md "dist/$RELEASE_NAME/"
 
 # 4. Create the archive
 echo "🗜️ Creating tarball..."

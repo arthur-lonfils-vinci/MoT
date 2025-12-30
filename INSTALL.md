@@ -14,7 +14,7 @@ The server runs inside a Docker container.
     ```bash
     docker-compose up -d --build
     ```
-    * The server listens on port **8085** (TCP).
+    * The server listens on port **8010** (TCP).
     * Data is persisted in `./server_data`.
     * Logs are available in `./server_logs`.
 
@@ -26,11 +26,11 @@ We provide a pre-compiled static binary for Linux (64-bit).
 
 ### Option A: The "Easy" Installer (Recommended)
 
-1.  **Download the release archive** (`mot-client-v0.5.tar.gz`) from GitHub.
+1.  **Download the release archive** (`mot-client-{version}.tar.gz`) from GitHub.
 2.  **Extract it**:
     ```bash
-    tar -xzf mot-client-v0.5.tar.gz
-    cd mot-client-v0.5
+    tar -xzf mot-client-{version}.tar.gz
+    cd mot-client-{version}
     ```
 3.  **Run the installer**:
     ```bash
@@ -56,6 +56,14 @@ If you prefer not to use the installer script:
     ```bash
     ./client_linux_amd64 server.example.com
     ```
+
+
+## Client Uninstall
+
+Use the `uninstall.sh` script that is in the app directory `~/.mot/uninstall.sh` by default
+```bash
+./uninstall.sh
+```
 
 ---
 
