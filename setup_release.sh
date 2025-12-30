@@ -2,6 +2,7 @@
 make clean && make static-client
 
 # 2. Create a temporary folder for the release
+rm -rf dist/*
 mkdir -p dist/mot-client-v0.5/bin
 
 # 3. Copy the Binary and the Installer
