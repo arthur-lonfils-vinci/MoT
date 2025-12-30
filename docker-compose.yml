@@ -1,0 +1,12 @@
+services:
+  messagerie-server:
+    build: .
+    container_name: messagerie_server
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      # Map the container's data folder to a local 'server_data' folder on your host
+      - ./server_data:/app/data
+      # Map logs if you want to see them outside
+      - ./server_logs:/app/log
