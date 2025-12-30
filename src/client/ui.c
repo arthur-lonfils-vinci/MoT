@@ -39,7 +39,7 @@ int ui_draw_start_menu()
 	pthread_mutex_lock(&ui_lock);
 	wclear(win_main);
 	box(win_main, 0, 0);
-	mvwprintw(win_main, height / 3, width / 2 - 10, "=== ADLOG V4 ===");
+	mvwprintw(win_main, height / 3, width / 2 - 10, "=== MoT v0.5 ===");
 	mvwprintw(win_main, height / 3 + 2, width / 2 - 8, "[1] Login");
 	mvwprintw(win_main, height / 3 + 3, width / 2 - 8, "[2] Register");
 	mvwprintw(win_main, height / 3 + 4, width / 2 - 8, "[3] Quit");
