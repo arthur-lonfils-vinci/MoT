@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 #include <ncurses.h>
 #include <sys/utsname.h>
 #include <unistd.h>
+#include <netdb.h>
 #include "protocol.h"
 #include "ui.h"
 #include "logger.h"
@@ -151,26 +153,63 @@ void *network_thread(void *arg)
 	return NULL;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 	log_init("client");
 	log_print(LOG_INFO, "Client started");
 	app_init();
 
-	struct sockaddr_in serv_addr;
-	if ((app.sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-		return -1;
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(PORT);
-	inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr);
+	// 1. Determine Server Hostname
+	const char *server_host = "server-mot.arthur-server.com";
 
-	if (connect(app.sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	if (argc > 1)
 	{
-		log_print(LOG_ERROR, "Connection failed to 127.0.0.1:%d", PORT);
-		printf("Connection failed.\n");
-		return -1;
+		server_host = argv[1];
 	}
-	log_print(LOG_INFO, "Connected to server");
+
+	log_print(LOG_INFO, "Attempting to connect to: %s:%d", server_host, PORT);
+
+	// 2. DNS Resolution (getaddrinfo)
+    struct addrinfo hints, *res, *p;
+    int status;
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%d", PORT);
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;     // Allow IPv4 or IPv6
+    hints.ai_socktype = SOCK_STREAM; // TCP
+
+    if ((status = getaddrinfo(server_host, port_str, &hints, &res)) != 0) {
+        log_print(LOG_ERROR, "DNS lookup failed for %s: %s", server_host, gai_strerror(status));
+        printf("Error: Could not resolve hostname %s\n", server_host);
+        return -1;
+    }
+
+    // 3. Loop through results and attempt connection
+    app.sock_fd = -1;
+    for(p = res; p != NULL; p = p->ai_next) {
+        if ((app.sock_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            continue; // Try next result
+        }
+
+        if (connect(app.sock_fd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(app.sock_fd);
+            app.sock_fd = -1;
+            continue; // Try next result
+        }
+
+        break; // Connected successfully!
+    }
+
+    freeaddrinfo(res); // Free memory allocated by getaddrinfo
+
+    if (app.sock_fd == -1) {
+        log_print(LOG_ERROR, "Failed to connect to %s", server_host);
+        printf("Connection failed.\n");
+        return -1;
+    }
+
+    log_print(LOG_INFO, "Connected to server");
 
 	ui_init();
 
