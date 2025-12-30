@@ -4,6 +4,7 @@ obj
 log
 data
 backups
+dist
 *.log
 *.tmp
 *.bak

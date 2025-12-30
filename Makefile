@@ -65,7 +65,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 directories:
-	@mkdir -p $(OBJ_DIR) $(BIN_DIR) $(LOG_DIR) $(BACKUPS_DIR) $(DATA_DIR)/backups
+	@mkdir -p $(OBJ_DIR) $(BIN_DIR) $(LOG_DIR) $(DATA_DIR)/backups
 
 # Add static-client to phony targets so 'make static-client' always checks dependencies
 static-client: directories $(TARGET_CLIENT_STATIC)
