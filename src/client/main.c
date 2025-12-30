@@ -187,6 +187,9 @@ int main(int argc, char *argv[])
 
     // 3. Loop through results and attempt connection
     app.sock_fd = -1;
+
+		printf("Connecting to %s:%d...\n", server_host, PORT);
+
     for(p = res; p != NULL; p = p->ai_next) {
         if ((app.sock_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
             continue; // Try next result

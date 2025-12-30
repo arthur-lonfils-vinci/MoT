@@ -155,8 +155,12 @@ int main()
 				if (new_sock >= 0)
 				{
 					// Set Timeout
-					struct timeval tv = {2, 0}; // 2 seconds
-					setsockopt(new_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+					struct timeval tv;
+					tv.tv_sec = 2; // 2 Seconds timeout
+					tv.tv_usec = 0;
+					setsockopt(new_sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
+
+					log_print(LOG_INFO, "New connection accepted (FD: %d)", new_sock);
 
 					ev.events = EPOLLIN;
 					ev.data.fd = new_sock;
