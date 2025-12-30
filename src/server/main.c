@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <sys/time.h>
 #include "protocol.h"
 #include "storage.h"
 #include "logger.h"
@@ -104,6 +106,7 @@ Client *get_client_by_fd(int fd)
 
 int main()
 {
+	signal(SIGPIPE, SIG_IGN);
 	log_init("server");
 	log_print(LOG_INFO, "Starting Server V4 (SQLite+UID)...");
 
@@ -151,6 +154,10 @@ int main()
 				int new_sock = accept(server_fd, (struct sockaddr *)&cli_addr, &len);
 				if (new_sock >= 0)
 				{
+					// Set Timeout
+					struct timeval tv = {2, 0}; // 2 seconds
+					setsockopt(new_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
 					ev.events = EPOLLIN;
 					ev.data.fd = new_sock;
 					epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_sock, &ev);
@@ -164,6 +171,8 @@ int main()
 				MessageType type;
 				void *payload = NULL;
 				uint32_t len;
+
+				log_print(LOG_DEBUG, "Processing FD %d: waiting for packet...", fd);
 
 				if (recv_packet(fd, &type, &payload, &len) <= 0)
 				{
@@ -182,6 +191,7 @@ int main()
 				}
 
 				Client *cli = get_client_by_fd(fd);
+				log_print(LOG_DEBUG, "Packet received from FD %d", fd);
 				if (!cli)
 				{
 					if (payload)

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define PORT 85
+#define PORT 8010
 #define BUFFER_SIZE 4096
 #define MAX_NAME_LEN 32
 #define MAX_EMAIL_LEN 64

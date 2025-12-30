@@ -17,7 +17,7 @@ RUN make clean && make
 RUN mkdir -p data/backups
 
 # Expose the port defined in protocol.h (8080)
-EXPOSE 85
+EXPOSE 8010
 
 # Run the server
 CMD ["./bin/server"]
