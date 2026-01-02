@@ -57,6 +57,77 @@ int ui_draw_start_menu()
 	}
 }
 
+void ui_draw_first_start_wizard(char *host_buffer, int host_len, int *port_out)
+{
+	pthread_mutex_lock(&ui_lock);
+	wclear(win_main);
+	box(win_main, 0, 0);
+
+	// Title
+	wattron(win_main, A_BOLD);
+	mvwprintw(win_main, height / 2 - 6, (width - 20) / 2, "WELCOME TO MoT");
+	wattroff(win_main, A_BOLD);
+
+	// Instructions
+	mvwprintw(win_main, height / 2 - 3, (width - 60) / 2, "This looks like your first time running the client.");
+	mvwprintw(win_main, height / 2 - 2, (width - 60) / 2, "Please configure the server connection details (or leave blank).");
+
+	// Warning (Red if supported)
+	if (has_colors()) wattron(win_main, COLOR_PAIR(3));
+	mvwprintw(win_main, height / 2 - 1, (width - 60) / 2, "(!) Warning:");
+	mvwprintw(win_main, height / 2 + 0, (width - 60) / 2, "Changing these values implies a CA certificate change.");
+	mvwprintw(win_main, height / 2 + 1, (width - 60) / 2, "If using a custom server, ensure you have the correct certificates.");
+	if (has_colors()) wattroff(win_main, COLOR_PAIR(3));
+
+	wrefresh(win_main);
+	pthread_mutex_unlock(&ui_lock);
+
+	// Defined Defaults
+	const char *def_host = "server-mot.arthur-server.com";
+	const char *def_port = "8010";
+	char port_str[8] = {0};
+
+	// Note: We display the default in the prompt so the user knows
+	char prompt_host[128];
+	snprintf(prompt_host, sizeof(prompt_host), "Server Host [%s]: ", def_host);
+
+	ui_input_string(height / 2 + 3, (width - 70) / 2, prompt_host, host_buffer, host_len - 1);
+
+	if (strlen(host_buffer) == 0) {
+		strncpy(host_buffer, def_host, host_len - 1);
+		// Visual feedback that default was applied
+		pthread_mutex_lock(&ui_lock);
+		mvwprintw(win_main, height / 2 + 3, (width - 70) / 2 + strlen(prompt_host), "%s", def_host);
+		pthread_mutex_unlock(&ui_lock);
+	}
+
+
+	char prompt_port[64];
+	snprintf(prompt_port, sizeof(prompt_port), "Server Port [%s]: ", def_port);
+
+	ui_input_string(height / 2 + 5, (width - 70) / 2, prompt_port, port_str, 6);
+
+	// CHECK: If empty, apply default
+	if (strlen(port_str) == 0) {
+		strncpy(port_str, def_port, 7);
+		// Visual feedback
+		pthread_mutex_lock(&ui_lock);
+		mvwprintw(win_main, height / 2 + 5, (width - 70) / 2 + strlen(prompt_port), "%s", def_port);
+		pthread_mutex_unlock(&ui_lock);
+	}
+
+	*port_out = atoi(port_str);
+	if (*port_out <= 0 || *port_out > 65535)
+		*port_out = 8010;
+
+	pthread_mutex_lock(&ui_lock);
+	mvwprintw(win_main, height / 2 + 8, (width - 40) / 2, "Configuration saved! Press any key...");
+	wrefresh(win_main);
+	pthread_mutex_unlock(&ui_lock);
+	
+	wgetch(win_main);
+}
+
 void ui_draw_register(char *email, char *user, char *pass)
 {
 	pthread_mutex_lock(&ui_lock);
@@ -194,41 +265,50 @@ void ui_draw_create_group_form(char *name, char *desc, ContactSummary *contacts,
 	pthread_mutex_unlock(&ui_lock);
 }
 
-void ui_draw_friends_list(ContactSummary *contacts, int count, int selection_idx, int requests_count) {
-    pthread_mutex_lock(&ui_lock);
-    wclear(win_main);
-    box(win_main, 0, 0);
+void ui_draw_friends_list(ContactSummary *contacts, int count, int selection_idx, int requests_count)
+{
+	pthread_mutex_lock(&ui_lock);
+	wclear(win_main);
+	box(win_main, 0, 0);
 
-    wattron(win_main, COLOR_PAIR(1));
-    mvwprintw(win_main, 1, 2, " FRIENDS ");
-    wattroff(win_main, COLOR_PAIR(1));
+	wattron(win_main, COLOR_PAIR(1));
+	mvwprintw(win_main, 1, 2, " FRIENDS ");
+	wattroff(win_main, COLOR_PAIR(1));
 
-    // Footer with commands
-    if (requests_count > 0) {
-        wattron(win_main, COLOR_PAIR(3)); // Highlight requests if pending
-        mvwprintw(win_main, height - 2, 20, "[R] Requests (%d)", requests_count);
-        wattroff(win_main, COLOR_PAIR(3));
-        mvwprintw(win_main, height - 2, 2, "[A] Add Friend");
-        mvwprintw(win_main, height - 2, 38, "[Enter] Chat  [Esc] Back");
-    } else {
-        mvwprintw(win_main, height - 2, 2, "[A] Add Friend  [R] Requests  [Enter] Chat  [Esc] Back");
-    }
+	// Footer with commands
+	if (requests_count > 0)
+	{
+		wattron(win_main, COLOR_PAIR(3)); // Highlight requests if pending
+		mvwprintw(win_main, height - 2, 20, "[R] Requests (%d)", requests_count);
+		wattroff(win_main, COLOR_PAIR(3));
+		mvwprintw(win_main, height - 2, 2, "[A] Add Friend");
+		mvwprintw(win_main, height - 2, 38, "[Enter] Chat  [Esc] Back");
+	}
+	else
+	{
+		mvwprintw(win_main, height - 2, 2, "[A] Add Friend  [R] Requests  [Enter] Chat  [Esc] Back");
+	}
 
-    if (count == 0) {
-        mvwprintw(win_main, 3, 4, "(No friends yet. Press [A] to add one!)");
-    }
+	if (count == 0)
+	{
+		mvwprintw(win_main, 3, 4, "(No friends yet. Press [A] to add one!)");
+	}
 
-    for (int i = 0; i < count; i++) {
-        if (i == selection_idx) {
-            wattron(win_main, COLOR_PAIR(2));
-            mvwprintw(win_main, 3 + i, 4, "> %s ", contacts[i].username);
-            wattroff(win_main, COLOR_PAIR(2));
-        } else {
-            mvwprintw(win_main, 3 + i, 4, "  %s ", contacts[i].username);
-        }
-    }
-    wrefresh(win_main);
-    pthread_mutex_unlock(&ui_lock);
+	for (int i = 0; i < count; i++)
+	{
+		if (i == selection_idx)
+		{
+			wattron(win_main, COLOR_PAIR(2));
+			mvwprintw(win_main, 3 + i, 4, "> %s ", contacts[i].username);
+			wattroff(win_main, COLOR_PAIR(2));
+		}
+		else
+		{
+			mvwprintw(win_main, 3 + i, 4, "  %s ", contacts[i].username);
+		}
+	}
+	wrefresh(win_main);
+	pthread_mutex_unlock(&ui_lock);
 }
 
 void ui_draw_chat(const char *conv_name, const char *history, const char *current_input)
@@ -430,7 +510,7 @@ void ui_input_string(int y, int x, const char *label, char *buffer, int max_len)
 	mvwprintw(win_main, y, x, "%s", label);
 	// Clear the rest of the line for input
 	for (int i = 0; i < max_len; i++)
-		waddch(win_main, '_');
+		waddch(win_main, ' ');
 	wrefresh(win_main);
 	pthread_mutex_unlock(&ui_lock);
 

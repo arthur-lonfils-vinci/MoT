@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <sys/stat.h>
 
 // Dynamic include at compilation
 #include "server_cert.h"
@@ -22,6 +23,7 @@
 // System
 #include "system/logger.h"
 #include "system/protocol.h"
+#include <system/config_loader.h>
 
 // Services
 #include "services/auth_service.h"
@@ -189,47 +191,111 @@ int main(int argc, char *argv[])
 	log_print(LOG_INFO, "Client started");
 	app_init();
 
-	// 1. SSL Initialization
-	init_openssl();
-	app.ctx = create_context(0);
+	// 1. CONFIGURATION
+	AppConfig config;
+	char config_path[512];
+	config_get_client_path(config_path, sizeof(config_path));
 
-	if (load_cert_from_memory(app.ctx, SERVER_CERT_PEM))
+	// Check if config exists
+	struct stat st;
+	int first_run = (stat(config_path, &st) != 0);
+
+	ui_init();
+
+	if (first_run)
 	{
-		log_print(LOG_INFO, "Loaded embedded server certificate for verification.");
-		// Optional: Force verification (OpenSSL defaults to 'none' if verify_mode not set)
-		SSL_CTX_set_verify(app.ctx, SSL_VERIFY_PEER, NULL);
+		// Create directory if needed
+		char *last_slash = strrchr(config_path, '/');
+		if (last_slash)
+		{
+			*last_slash = '\0';
+			mkdir(config_path, 0700); // Create ~/.mot
+			*last_slash = '/';
+		}
+
+		apply_defaults(&config); // Pre-fill defaults
+		ui_draw_first_start_wizard(config.server_host, sizeof(config.server_host), &config.port);
+		config_save_client(config_path, &config);
+		log_print(LOG_INFO, "First run configuration saved to %s", config_path);
 	}
 	else
 	{
-		log_print(LOG_WARN, "Failed to load embedded certificate (or empty). Connection may be insecure.");
+		config_load(config_path, &config);
+		log_print(LOG_INFO, "Loaded configuration from %s", config_path);
 	}
 
-	const char *server_host = "server-mot.arthur-server.com";
+	// CLI Override (Optional)
 	if (argc > 1)
+		strncpy(config.server_host, argv[1], sizeof(config.server_host) - 1);
+
+	// 2. SSL INIT (Updated)
+	init_openssl();
+	app.ctx = create_context(0);
+
+	int cert_loaded = 0;
+
+	// Certificate Logic: Custom CA vs Embedded
+	// Priority 1: Config File Path
+	if (strlen(config.ca_cert_path) > 0)
 	{
-		server_host = argv[1];
+		if (SSL_CTX_load_verify_locations(app.ctx, config.ca_cert_path, NULL))
+		{
+			log_print(LOG_INFO, "Loaded custom CA from config: %s", config.ca_cert_path);
+			cert_loaded = 1;
+		}
 	}
 
-	log_print(LOG_INFO, "Attempting to connect to: %s:%d", server_host, PORT);
+	// Priority 2: Portable "server.crt" in current folder
+	if (!cert_loaded)
+	{
+		struct stat st;
+		if (stat("server.crt", &st) == 0)
+		{
+			if (SSL_CTX_load_verify_locations(app.ctx, "server.crt", NULL))
+			{
+				log_print(LOG_INFO, "Detected and loaded local 'server.crt'");
+				cert_loaded = 1;
+			}
+		}
+	}
+
+	// Priority 3: Embedded Cert (Fallback)
+	if (!cert_loaded)
+	{
+		if (load_cert_from_memory(app.ctx, SERVER_CERT_PEM))
+		{
+			log_print(LOG_INFO, "Loaded embedded server certificate.");
+			cert_loaded = 1;
+		}
+	}
+
+	if (cert_loaded)
+	{
+		SSL_CTX_set_verify(app.ctx, SSL_VERIFY_PEER, NULL);
+	}
+
+	// 3. CONNECTION (Use config)
+	log_print(LOG_INFO, "Connecting to %s:%d...", config.server_host, config.port);
 
 	struct addrinfo hints, *res, *p;
-	int status;
 	char port_str[6];
-	snprintf(port_str, sizeof(port_str), "%d", PORT);
+	snprintf(port_str, sizeof(port_str), "%d", config.port);
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((status = getaddrinfo(server_host, port_str, &hints, &res)) != 0)
+	if (getaddrinfo(config.server_host, port_str, &hints, &res) != 0)
 	{
-		log_print(LOG_ERROR, "DNS lookup failed for %s: %s", server_host, gai_strerror(status));
-		printf("Error: Could not resolve hostname %s\n", server_host);
+		log_print(LOG_ERROR, "DNS lookup failed for %s", config.server_host);
+		printf("Error: Could not resolve hostname %s\n", config.server_host);
+		ui_cleanup();
+		cleanup_openssl();
 		return -1;
 	}
 
 	app.sock_fd = -1;
-	printf("Connecting to %s:%d...\n", server_host, PORT);
+	printf("Connecting to %s:%d...\n", config.server_host, config.port);
 
 	for (p = res; p != NULL; p = p->ai_next)
 	{
@@ -250,8 +316,10 @@ int main(int argc, char *argv[])
 
 	if (app.sock_fd == -1)
 	{
-		log_print(LOG_ERROR, "Failed to connect to %s", server_host);
+		log_print(LOG_ERROR, "Failed to connect to %s", config.server_host);
 		printf("Connection failed.\n");
+		ui_cleanup();
+		cleanup_openssl();
 		return -1;
 	}
 
@@ -266,13 +334,13 @@ int main(int argc, char *argv[])
 		close(app.sock_fd);
 		SSL_free(app.ssl);
 		SSL_CTX_free(app.ctx);
+		ui_cleanup();
+		cleanup_openssl();
 		return -1;
 	}
 
 	printf("Connected to server securely.\n");
 	log_print(LOG_INFO, "Connected to server via SSL");
-
-	ui_init();
 
 	// --- AUTH ---
 	int authenticated = 0;
