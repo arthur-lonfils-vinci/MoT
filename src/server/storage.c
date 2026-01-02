@@ -1,5 +1,4 @@
 #define _XOPEN_SOURCE 700
-#include "storage.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +8,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include "system/storage.h"
 
 static sqlite3 *db = NULL;
 
@@ -500,10 +500,8 @@ void storage_log_message(uint32_t conv_id, uint32_t sender_uid, const char *text
 
 char *storage_get_history(uint32_t conv_id)
 {
-	char *buf = malloc(16384);
-	if (!buf)
-		return NULL;
-	buf[0] = '\0';
+	char *buf = NULL;
+	size_t len = 0;
 
 	const char *sql = "SELECT u.username, m.text, m.timestamp FROM messages m "
 										"JOIN users u ON m.sender_id = u.uid "
@@ -511,7 +509,7 @@ char *storage_get_history(uint32_t conv_id)
 
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
-		return buf;
+		return strdup("");
 
 	sqlite3_bind_int(stmt, 1, conv_id);
 
@@ -522,11 +520,27 @@ char *storage_get_history(uint32_t conv_id)
 		time_t rawtime = (time_t)sqlite3_column_int64(stmt, 2);
 		struct tm *t = localtime(&rawtime);
 
-		char line[512];
-		snprintf(line, sizeof(line), "[%02d:%02d] %s: %s\n", t->tm_hour, t->tm_min, user, text);
-		strcat(buf, line);
+		char line_header[64];
+		snprintf(line_header, sizeof(line_header), "[%02d:%02d] %s: ", t->tm_hour, t->tm_min, user);
+
+		size_t line_len = strlen(line_header) + strlen(text) + 2; // +1 for \n, +1 for null (temp)
+
+		char *new_buf = realloc(buf, len + line_len + 1);
+		if (!new_buf)
+		{
+			// Allocation failed, stop here and return what we have
+			break;
+		}
+
+		buf = new_buf;
+
+		// Append
+		sprintf(buf + len, "%s%s\n", line_header, text);
+		len += line_len;
 	}
 	sqlite3_finalize(stmt);
+	if (!buf)
+		return strdup("");
 	return buf;
 }
 

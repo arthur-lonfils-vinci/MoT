@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "protocol.h"
+#include "system/protocol.h"
 
 #define SESSION_FILE "session.dat"
 

@@ -1,5 +1,3 @@
-/* src/common/logger.c */
-#include "logger.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <pthread.h>
@@ -8,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "system/logger.h"
 
 static FILE *log_file = NULL;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;

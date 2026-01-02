@@ -26,8 +26,8 @@ mkdir -p "dist/$RELEASE_NAME/bin"
 # 3. Copy the Binary, Installer, and Uninstaller
 echo "📋 Copying files..."
 cp bin/client_linux_amd64 "dist/$RELEASE_NAME/bin/"
-cp install.sh "dist/$RELEASE_NAME/"
-cp uninstall.sh "dist/$RELEASE_NAME/"
+cp scripts/install.sh "dist/$RELEASE_NAME/"
+cp scripts/uninstall.sh "dist/$RELEASE_NAME/"
 cp doc/README_CLIENT.md "dist/$RELEASE_NAME/"
 
 # 4. Create the archive

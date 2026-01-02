@@ -1,9 +1,9 @@
-#include "ui.h"
 #include <ncurses.h>
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdarg.h>
+#include "infrastructure/ui.h"
 
 static WINDOW *win_main;
 static pthread_mutex_t ui_lock = PTHREAD_MUTEX_INITIALIZER;

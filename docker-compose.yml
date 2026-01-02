@@ -10,3 +10,5 @@ services:
       - ./server_data:/app/data
       # Map logs if you want to see them outside
       - ./server_logs:/app/log
+      - ./server.crt:/app/server.crt:ro
+      - ./server.key:/app/server.key:ro

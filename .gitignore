@@ -20,3 +20,15 @@ dist
 .DS_Store
 .vscode
 .idea
+
+# SSL Certificates & Keys
+*.key
+*.crt
+*.pem
+*.csr
+
+# Auto-generated Header for Client
+include/server_cert.h
+
+# Scripts might generate temporary files
+scripts/*.tmp
