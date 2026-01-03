@@ -1,120 +1,172 @@
 # 📨 MoT - Messenger of Things
 
-**MoT** is a lightweight, high-performance terminal-based messaging application written in C. It features a robust central server using `epoll` for concurrency and a TUI (Text User Interface) client built with `ncurses`.
+**MoT** is a secure, lightweight, high-performance terminal-based messaging application written in C. It features a robust central server using `epoll` for concurrency and a TUI (Text User Interface) client built with `ncurses`.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-C-orange.svg)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)
+![Security](https://img.shields.io/badge/security-SSL%2FTLS-green.svg)
+![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
 
 ---
 
-## ✨ Features
+## Features
 
-### 🖥️ Server
+### Security
+* **SSL/TLS Encryption**: All communication between client and server is encrypted using OpenSSL.
+* **Certificate Pinning**: The client embeds the server's certificate at compile-time to prevent Man-in-the-Middle (MITM) attacks.
+* **Database Encryption**: Messages stored on the server are encrypted at rest using **AES-256**.
+* **Secure Passwords**: Passwords are hashed using SHA-512 with per-user random salts.
+
+### Server
 * **High Concurrency**: Uses Linux `epoll` to handle multiple simultaneous client connections efficiently.
-* **Data Persistence**: Stores users, conversations, and messages in a **SQLite** database (`messagerie.db`).
-* **Automatic Backups**: Creates daily backups of the database in `data/backups/` upon startup.
-* **Robust Logging**: Rotated daily logs stored in `log/` with timestamping and log levels.
-* **Docker Ready**: Fully containerized with `docker-compose` for easy deployment.
+* **Data Persistence**: SQLite database (`messagerie.db`) with automatic daily backups.
+* **Dockerized**: Multi-stage Docker build (GCC builder -> Alpine/Debian Slim runtime) with dynamic configuration via Entrypoint.
+* **Robust Logging**: Rotated daily logs with timestamping.
 
-### 📱 Client (TUI)
-* **Text User Interface**: Navigable via keyboard (Arrow keys, Enter, Esc), utilizing `ncurses` for a retro yet functional look.
-* **Authentication**: Secure Registration and Login system.
-* **Friends System**:
-    * Add friends via unique **Friend Codes** (7 characters).
-    * Accept/Deny friend requests.
-    * Real-time status updates.
-* **Messaging**:
-    * **Private DMs**: Automatically created upon accepting a friend request.
-    * **Group Chats**: Create groups, set names/descriptions, and manage members.
-    * **Admin Tools**: Group creators can kick members or delete the group.
-* **Persisted Session**: "Remember Me" functionality to stay logged in.
-* **System Integration**: Custom `mot` command wrapper for easy access from the terminal.
+### Client (TUI)
+* **Text User Interface**: Navigable via keyboard (Arrow keys, Enter, Esc) using `ncurses`.
+* **Smart Configuration**: Auto-detects environment (Official vs Custom server) via the installer.
+* **Features**:
+    * **Friends System**: Add via 7-char Friend Codes, Request management.
+    * **Messaging**: Private DMs and Group Chats (with Admin tools: Kick/Delete).
+    * **Offline Mode**: View cached conversation history even when the server is down.
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```text
 messagerie_c/
 ├── bin/                 # Compiled binaries (server, client)
-├── data/                # Database and Backups (Server only)
-│   ├── messagerie.db
-│   └── backups/
-├── include/             # Header files (.h)
+├── dist/                # Generated release packages (tar.gz)
+├── doc/                 # Documentation
+│   ├── README_CLIENT.md # User guide
+│   └── README_SERVER.md # Admin guide
+├── include/             # Header files
 │   ├── protocol.h       # Shared protocol definitions
-│   └── ...
-├── log/                 # Application logs (Client & Server)
+│   ├── server_cert.h    # Embedded certificate (Generated)
+│   └── system/          # Crypto, Logger, Config definitions
+├── scripts/             # DevOps & Automation
+│   ├── docker-entrypoint.sh # Server startup config generator
+│   ├── embed_cert.sh    # Injects .crt into C header
+│   ├── gencert.sh       # Generates self-signed certs
+│   ├── install.sh       # Client installer
+│   ├── uninstall.sh       # Client uninstaller
+│   └── setup_release.sh # Automated release builder
 ├── src/                 # Source code
-│   ├── client/          # Client-specific logic (UI, Network, Input)
-│   ├── server/          # Server-specific logic (Epoll, Storage)
-│   └── common/          # Shared utilities (Logger, Packet handling)
-├── Dockerfile           # Server container definition
-├── docker-compose.yml   # Server deployment config
-├── Makefile             # Build system
-├── install.sh           # Client installer script
-└── README.md            # This file
+│   ├── client/          # TUI, Network, Session
+│   ├── server/          # Epoll, Storage, Handlers
+│   └── common/          # Crypto, Logger, Protocol
+├── .env.template        # Template for server configuration
+├── Dockerfile           # Multi-stage server build
+├── docker-compose.yml   # Deployment config
+└── Makefile             # Build system
 ```
 
-## 📡 Protocol
+----
 
-The application uses a custom binary protocol defined in include/protocol.h.
+## Getting Started
+### 1. For Users (The Client)
 
-    Header: Fixed size (Type + Payload Length).
+We provide a pre-compiled static binary.
+Download the latest release (mot-client-vX.X.tar.gz).
 
-    Payload: Packed Structs (e.g., LoginPayload, SendMessagePayload).
+- Install:
+```bash
+./install.sh
+```
 
-    Flow: TCP (Stream).
+The installer automatically configures the client to connect to the official server.
 
-Key Message Types
+- Run:
+```bash
+mot
+```
 
+👉 Read the [Full Client Guide](https://github.com/arthur-lonfils-vinci/MoT/blob/main/doc/README_CLIENT.md) for custom server connections and details.
 
-## 🔧 Deployment
-Server (Docker)
+### 2. For Admins (The Server)
 
-The server is designed to run in a Docker container with persistent storage for the database and logs.
+The server runs via Docker and is configured using environment variables.
 
-    Port: 85 (Configurable in protocol.h and docker-compose.yml).
+- Setup Configuration:
+```bash
+cp .env.template .env
+# Edit .env to set DB_KEY, CERT_FILE, and OFFICIAL_PORT
+```
 
-    Volumes: Maps ./data and ./log to the host machine for persistence.
+- Run with Docker:
+```bash
+docker-compose up -d --build
+```
 
-Client (User)
+👉 Read the [Full Server Guide](https://github.com/arthur-lonfils-vinci/MoT/blob/main/doc/README_SERVER.md) for certificate management and deployment details.
 
-Users can install the client using the provided script, which sets up a dedicated environment in ~/.mot/ to keep logs and session files organized.
+----
 
+## Development & Building
 
-## 📝 Logging & Data
-Logs
+If you want to contribute or build from source:
+Prerequisites
 
-Logs are automatically rotated and stored in the log/ directory.
+- GCC, Make
 
-    Format: [HH:MM:SS] [LEVEL] [File:Line] Message
+- OpenSSL Development Libraries (libssl-dev)
 
-    Server Log: log/server_YYYY-MM-DD.log
+- NCurses Development Libraries (libncurses-dev)
 
-    Client Log: log/client_u{UID}_YYYY-MM-DD.log
+- SQLite3 Development Libraries (libsqlite3-dev)
 
-Database
+Build Commands
+```bash
+# 1. Generate Development Certificates (if you don't have them)
+./scripts/gencert.sh
 
-    Engine: SQLite3
+# 2. Build Server
+make server
 
-    Location: data/messagerie.db
+# 3. Build Client (Automatically embeds the cert)
+make static-client
+```
 
-    Schema: Stores users, contacts, requests, conversations, participants, and messages.
+### Creating a Release
 
+To create a distributable package (like the ones on GitHub):
+```bash
+# Usage: ./scripts/setup_release.sh <version_tag>
+./scripts/setup_release.sh v0.6.3
+```
+
+This script compiles the binary, embeds the current certificate, injects the .env configuration into the installer, and zips everything into dist/.
+
+-----
+
+## Protocol & Encryption
+
+- Transport: TCP Stream wrapped in SSL/TLS.
+
+- Format: Binary Protocol (Header + Payload).
+
+	- Header: Type (1 byte) + Length (4 bytes).
+
+  - Payload: Packed C Structs.
+
+- Storage: Messages are encrypted via AES-256 before insertion into SQLite and decrypted only upon retrieval.
+
+----
 
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
+We welcome contributions!
 
-    Fork the repository.
+1. Fork the repository.
 
-    Create a feature branch (git checkout -b feature/NewThing).
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`).
 
-    Commit your changes.
+3. Commit your changes.
 
-    Push to the branch.
+4. Push to the branch.
 
-    Open a Pull Request.
+5. Open a Pull Request.
 
 Developed by Arthur
