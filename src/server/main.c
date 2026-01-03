@@ -15,6 +15,8 @@
 #include "system/protocol.h"
 #include "system/storage.h"
 #include "system/logger.h"
+#include "system/config_loader.h"
+#include "system/crypto.h"
 
 // Infrastructure
 #include "infrastructure/server_types.h"
@@ -35,42 +37,63 @@ int main()
 {
 	signal(SIGPIPE, SIG_IGN);
 	log_init("server");
-	log_print(LOG_INFO, "Starting Secure Server (MoT SSL)...");
+	// 1. Load Config
+	AppConfig config;
+	if (config_load("server.conf", &config))
+	{
+		log_print(LOG_INFO, "Loaded configuration from server.conf");
+	}
+	else
+	{
+		log_print(LOG_INFO, "No server.conf found, using defaults (Port: %d)", config.port);
+	}
 
-	// 1. Initialize OpenSSL
+	if (strlen(config.db_encryption_key) > 0) {
+        crypto_init(config.db_encryption_key);
+        log_print(LOG_INFO, "Database encryption enabled.");
+    } else {
+        log_print(LOG_WARN, "NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured");
+				printf("NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured\n");
+        // Optional: Exit if security is strict requirements
+				return -1;
+    }
+
+	// 2. Initialize OpenSSL
 	init_openssl();
 	ctx = create_context(1); // 1 = Server
-	configure_context(ctx, "server.crt", "server.key");
+
+	configure_context(ctx, config.server_cert_path, config.server_key_path);
 	log_print(LOG_INFO, "SSL Context initialized. loaded certs.");
 
-	int server_fd, epoll_fd;
-	struct sockaddr_in address;
-	struct epoll_event ev, events[MAX_EVENTS];
-
+	// 3. DB Init
 	init_clients();
-	storage_backup("data/messagerie.db");
+	storage_backup(config.db_path);
 
-	if (!storage_init("data/messagerie.db"))
+	if (!storage_init(config.db_path))
 	{
-		log_print(LOG_ERROR, "Failed to init DB");
+		log_print(LOG_ERROR, config.db_path);
 		return 1;
 	}
 
-	server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	// 4. Socket Bind
+	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	struct sockaddr_in address;
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
-	address.sin_port = htons(PORT);
+	address.sin_port = htons(config.port);
+
 	int opt = 1;
 	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	bind(server_fd, (struct sockaddr *)&address, sizeof(address));
 	listen(server_fd, 10);
 
-	epoll_fd = epoll_create1(0);
+	int epoll_fd = epoll_create1(0);
+	struct epoll_event ev, events[MAX_EVENTS];
 	ev.events = EPOLLIN;
 	ev.data.fd = server_fd;
 	epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev);
 
-	printf("Secure Server Running on %d...\n", PORT);
+	printf("Secure Server Running on %d...\n", config.port);
 
 	while (1)
 	{
@@ -219,6 +242,7 @@ int main()
 	}
 
 	// Cleanup
+	free_clients();
 	cleanup_openssl();
 	storage_close();
 	log_close();

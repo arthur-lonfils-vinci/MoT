@@ -15,7 +15,6 @@
 #include <openssl/err.h>
 
 // --- CONSTANTS ---
-#define PORT 8010
 #define BUFFER_SIZE 4096
 
 // Field Limits

@@ -8,9 +8,26 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+// System
+#include "system/crypto.h"
 #include "system/storage.h"
 
 static sqlite3 *db = NULL;
+
+void generate_random_salt(char *buffer)
+{
+	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
+	// Format: $6$rounds=5000$ + 16 chars of salt
+	strcpy(buffer, "$6$rounds=5000$");
+	int base_len = strlen(buffer);
+
+	for (int i = 0; i < 16; i++)
+	{
+		buffer[base_len + i] = charset[rand() % 64];
+	}
+	buffer[base_len + 16] = '\0';
+}
 
 static void ensure_directory(const char *path)
 {
@@ -133,7 +150,9 @@ int storage_register_user(const char *email, const char *username, const char *p
 {
 	char code[8];
 	generate_friend_code(code);
-	char *hash = crypt(password, "$6$randomsalt$");
+	char salt[64];
+	generate_random_salt(salt);
+	char *hash = crypt(password, salt);
 
 	const char *sql = "INSERT INTO users (username, email, password_hash, friend_code) VALUES (?, ?, ?, ?)";
 	sqlite3_stmt *stmt;
@@ -202,7 +221,9 @@ int storage_update_user(uint32_t uid, const char *new_username, const char *new_
 	}
 	if (strlen(new_password) > 0)
 	{
-		char *hash = crypt(new_password, "$6$salt$");
+		char salt[64];
+		generate_random_salt(salt);
+		char *hash = crypt(new_password, salt);
 		const char *sql = "UPDATE users SET password_hash = ? WHERE uid = ?";
 		sqlite3_stmt *stmt;
 		if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK)
@@ -343,7 +364,7 @@ int storage_get_requests_data(uint32_t uid, ContactSummary *out_array, int max_c
 	return count;
 }
 
-// --- CONVERSATIONS UPDATED ---
+// --- CONVERSATIONS ---
 
 // Check if a private conversation already exists between two users
 uint32_t storage_find_private_conversation(uint32_t uid_a, uint32_t uid_b)
@@ -485,17 +506,23 @@ int storage_get_conv_participants(uint32_t conv_id, uint32_t *out_uids, int max_
 
 void storage_log_message(uint32_t conv_id, uint32_t sender_uid, const char *text)
 {
+
+	char *encrypted_text = crypto_encrypt(text);
+	if (!encrypted_text)
+		return;
+
 	const char *sql = "INSERT INTO messages (conv_id, sender_id, text, timestamp) VALUES (?, ?, ?, ?)";
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK)
 	{
 		sqlite3_bind_int(stmt, 1, conv_id);
 		sqlite3_bind_int(stmt, 2, sender_uid);
-		sqlite3_bind_text(stmt, 3, text, -1, SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 3, encrypted_text, -1, SQLITE_STATIC);
 		sqlite3_bind_int64(stmt, 4, time(NULL));
 		sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
 	}
+	free(encrypted_text);
 }
 
 char *storage_get_history(uint32_t conv_id)
@@ -516,14 +543,17 @@ char *storage_get_history(uint32_t conv_id)
 	while (sqlite3_step(stmt) == SQLITE_ROW)
 	{
 		const char *user = (const char *)sqlite3_column_text(stmt, 0);
-		const char *text = (const char *)sqlite3_column_text(stmt, 1);
+		const char *enc_text = (const char *)sqlite3_column_text(stmt, 1);
+
+		char *decrypted_text = crypto_decrypt(enc_text);
+
 		time_t rawtime = (time_t)sqlite3_column_int64(stmt, 2);
 		struct tm *t = localtime(&rawtime);
 
 		char line_header[64];
 		snprintf(line_header, sizeof(line_header), "[%02d:%02d] %s: ", t->tm_hour, t->tm_min, user);
 
-		size_t line_len = strlen(line_header) + strlen(text) + 2; // +1 for \n, +1 for null (temp)
+		size_t line_len = strlen(line_header) + strlen(decrypted_text) + 2; // +1 for \n, +1 for null (temp)
 
 		char *new_buf = realloc(buf, len + line_len + 1);
 		if (!new_buf)
@@ -535,8 +565,10 @@ char *storage_get_history(uint32_t conv_id)
 		buf = new_buf;
 
 		// Append
-		sprintf(buf + len, "%s%s\n", line_header, text);
+		sprintf(buf + len, "%s%s\n", line_header, decrypted_text);
 		len += line_len;
+
+		free(decrypted_text);
 	}
 	sqlite3_finalize(stmt);
 	if (!buf)

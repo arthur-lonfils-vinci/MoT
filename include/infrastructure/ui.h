@@ -34,6 +34,13 @@ void ui_cleanup(void);
 
 // --- Drawing Functions ---
 // Each function draws a specific screen based on the provided data.
+/**
+ * @brief Draws the First Start Wizard to configure Host/Port.
+ * @param host_buffer Output buffer for hostname.
+ * @param host_len Size of host_buffer.
+ * @param port_out Pointer to integer for port.
+ */
+void ui_draw_first_start_wizard(char *host_buffer, int host_len, int *port_out);
 
 int ui_draw_start_menu(void);
 void ui_draw_register(char *email, char *user, char *pass);
