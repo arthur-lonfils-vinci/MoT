@@ -32,3 +32,7 @@ include/server_cert.h
 
 # Scripts might generate temporary files
 scripts/*.tmp
+
+# env
+.env*
+!.env.template

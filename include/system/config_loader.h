@@ -6,8 +6,8 @@
 #ifndef CONFIG_LOADER_H
 #define CONFIG_LOADER_H
 
-#define DEFAULT_PORT 8010
-#define DEFAULT_HOST "server-mot.arthur-server.com"
+#define DEFAULT_PORT 8080
+#define DEFAULT_HOST "localhost
 #define DEFAULT_DB_PATH "data/messagerie.db"
 
 typedef struct {

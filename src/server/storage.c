@@ -133,7 +133,9 @@ int storage_register_user(const char *email, const char *username, const char *p
 {
 	char code[8];
 	generate_friend_code(code);
-	char *hash = crypt(password, "$6$randomsalt$");
+	char salt[64];
+	generate_random_salt(salt);
+	char *hash = crypt(password, salt);
 
 	const char *sql = "INSERT INTO users (username, email, password_hash, friend_code) VALUES (?, ?, ?, ?)";
 	sqlite3_stmt *stmt;
@@ -202,7 +204,9 @@ int storage_update_user(uint32_t uid, const char *new_username, const char *new_
 	}
 	if (strlen(new_password) > 0)
 	{
-		char *hash = crypt(new_password, "$6$salt$");
+		char salt[64];
+		generate_random_salt(salt);
+		char *hash = crypt(new_password, salt);
 		const char *sql = "UPDATE users SET password_hash = ? WHERE uid = ?";
 		sqlite3_stmt *stmt;
 		if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK)
@@ -644,4 +648,16 @@ int storage_delete_conversation(uint32_t conv_id)
 		}
 	}
 	return 1;
+}
+
+void generate_random_salt(char *buffer) {
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
+    // Format: $6$rounds=5000$ + 16 chars of salt
+    strcpy(buffer, "$6$rounds=5000$");
+    int base_len = strlen(buffer);
+    
+    for (int i = 0; i < 16; i++) {
+        buffer[base_len + i] = charset[rand() % 64];
+    }
+    buffer[base_len + 16] = '\0';
 }
