@@ -25,6 +25,8 @@ fi
 TARGET_BIN_NAME="client"
 WRAPPER_NAME="mot"
 
+UNINSTALL_SCRIPT="uninstall.sh"
+
 BIN_DIR="${APP_DIR}/bin"
 LOG_DIR="${APP_DIR}/log"
 CONFIG_FILE="${APP_DIR}/config.conf"
@@ -51,13 +53,6 @@ if [[ ! -f "$SOURCE_BIN" ]]; then
   exit 1
 fi
 
-# Fallback if placeholders weren't replaced (Development Mode)
-if [ "$OFFICIAL_HOST" == "__OFFICIAL_HOST__" ]; then
-    info "⚠️  Development mode detected (Placeholders found)."
-    OFFICIAL_HOST="127.0.0.1"
-    OFFICIAL_PORT="8010"
-fi
-
 # 2) Create install dirs
 info "1) Creating install directory at ${APP_DIR}..."
 mkdir -p "$BIN_DIR" "$LOG_DIR"
@@ -66,8 +61,9 @@ mkdir -p "$BIN_DIR" "$LOG_DIR"
 info "2) Copying binary..."
 cp -f "$SOURCE_BIN" "${BIN_DIR}/${TARGET_BIN_NAME}"
 chmod +x "${BIN_DIR}/${TARGET_BIN_NAME}"
+cp -f "$UNINSTALL_SCRIPT" "${APP_DIR}"
 
-# 4) Generate Configuration (NEW)
+# 4) Generate Configuration
 info "3) Configuring connection..."
 if [ ! -f "$CONFIG_FILE" ]; then
     cat > "$CONFIG_FILE" <<EOF

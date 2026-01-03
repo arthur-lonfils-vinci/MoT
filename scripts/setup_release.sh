@@ -7,7 +7,7 @@ set -e
 # This allows you to keep your production secrets out of the repo
 if [ -f ".env" ]; then
     echo "Loading secrets from .env..."
-    export $(grep -v '^#' .env | xargs)
+    export $(grep -v '^#' .env | tr -d '\r' | xargs)
 else
     echo "/!\ .env not found! Using defaults (127.0.0.1:8010)."
     OFFICIAL_HOST="127.0.0.1"
@@ -57,6 +57,13 @@ cp doc/README_CLIENT.md "$DIST_DIR/"
 echo "4)  Injecting server configuration..."
 sed -i "s|__OFFICIAL_HOST__|$OFFICIAL_HOST|g" "$DIST_DIR/install.sh"
 sed -i "s|__OFFICIAL_PORT__|$OFFICIAL_PORT|g" "$DIST_DIR/install.sh"
+
+if grep -q "__OFFICIAL_HOST__" "$TARGET_INSTALL"; then
+    echo "❌ CRITICAL ERROR: Variable substitution failed!"
+    echo "   The placeholder '__OFFICIAL_HOST__' is still present in install.sh."
+    echo "   Debug: Tried to replace with '$OFFICIAL_HOST'"
+    exit 1
+fi
 
 # Make scripts executable
 chmod +x "$DIST_DIR/install.sh"
