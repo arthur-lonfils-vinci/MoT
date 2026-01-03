@@ -23,6 +23,7 @@ typedef struct {
     char server_cert_path[512];
     char server_key_path[512];
 		char db_encryption_key[256];
+		int theme_id;
 } AppConfig;
 
 /**
