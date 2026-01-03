@@ -1,0 +1,35 @@
+# Use the same base as your production build
+FROM debian:bookworm-slim
+
+# Install Runtime Dependencies + Valgrind
+RUN apt-get update && apt-get install -y \
+    libsqlite3-0 \
+    libssl3 \
+    openssl \
+    ca-certificates \
+    valgrind \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary and scripts (Assuming you ran 'make' locally or use the builder stage)
+# To keep it simple, we can copy from your local bin/ if you ran make static-client
+# OR copy from the builder stage like the original Dockerfile:
+COPY --from=gcc:12-bookworm /usr/lib /usr/lib_ignore 
+# (Simpler: just copy your local bin/server since you have the code)
+COPY bin/server ./server
+COPY scripts/docker-entrypoint.sh /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN mkdir -p data/backups
+
+# Important: Valgrind runs significantly slower, so we increase timeouts if needed
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+# Run Valgrind wrapping the server
+CMD ["valgrind", \
+     "--leak-check=full", \
+     "--show-leak-kinds=all", \
+     "--track-origins=yes", \
+     "--log-file=/app/log/valgrind_server.log", \
+     "./server"]

@@ -1,0 +1,29 @@
+services:
+  messagerie-server:
+    build: 
+      context: .
+      dockerfile: Dockerfile.debug
+    container_name: messagerie_server
+    restart: always
+    environment:
+      - OFFICIAL_PORT=${OFFICIAL_PORT}
+      - DB_KEY=${DB_KEY}
+      - DB_PATH=${DB_PATH}
+      - CERT_FILE=${CERT_FILE}
+      - KEY_FILE=${KEY_FILE}
+    ports:
+      - "${OFFICIAL_PORT:-8080}:${OFFICIAL_PORT:-8080}"
+    volumes:
+      # Map the container's data folder to a local 'server_data' folder on your host
+      - ./server_data:/app/data
+      # Map logs if you want to see them outside
+      - ./server_logs:/app/log
+      - ./server.crt:/app/server.crt:ro
+      - ./server.key:/app/server.key:ro
+    command: >
+      valgrind 
+      --leak-check=full 
+      --show-leak-kinds=all 
+      --track-origins=yes 
+      --log-file=/app/log/valgrind_server.log 
+      ./server

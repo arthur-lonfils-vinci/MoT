@@ -33,9 +33,19 @@
 // Global SSL Context
 SSL_CTX *ctx;
 
+static volatile sig_atomic_t server_running = 1;
+
+void handle_signal(int sig) {
+    (void)sig; // unused
+    server_running = 0;
+}
+
 int main()
 {
-	signal(SIGPIPE, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);       // Ignore broken pipes (client disconnects)
+	signal(SIGINT, handle_signal);	// Handle Ctrl+C
+	signal(SIGTERM, handle_signal); // Handle Docker Stop
+
 	log_init("server");
 	// 1. Load Config
 	AppConfig config;
@@ -48,15 +58,18 @@ int main()
 		log_print(LOG_INFO, "No server.conf found, using defaults (Port: %d)", config.port);
 	}
 
-	if (strlen(config.db_encryption_key) > 0) {
-        crypto_init(config.db_encryption_key);
-        log_print(LOG_INFO, "Database encryption enabled.");
-    } else {
-        log_print(LOG_WARN, "NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured");
-				printf("NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured\n");
-        // Optional: Exit if security is strict requirements
-				return -1;
-    }
+	if (strlen(config.db_encryption_key) > 0)
+	{
+		crypto_init(config.db_encryption_key);
+		log_print(LOG_INFO, "Database encryption enabled.");
+	}
+	else
+	{
+		log_print(LOG_WARN, "NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured");
+		printf("NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured\n");
+		// Optional: Exit if security is strict requirements
+		return -1;
+	}
 
 	// 2. Initialize OpenSSL
 	init_openssl();
@@ -95,9 +108,12 @@ int main()
 
 	printf("Secure Server Running on %d...\n", config.port);
 
-	while (1)
+	while (server_running)
 	{
 		int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+
+		if (nfds < 0) continue;
+
 		for (int i = 0; i < nfds; i++)
 		{
 			if (events[i].data.fd == server_fd)
@@ -242,6 +258,7 @@ int main()
 	}
 
 	// Cleanup
+	close(server_fd);
 	free_clients();
 	cleanup_openssl();
 	storage_close();
