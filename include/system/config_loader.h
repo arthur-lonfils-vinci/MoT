@@ -7,7 +7,7 @@
 #define CONFIG_LOADER_H
 
 #define DEFAULT_PORT 8080
-#define DEFAULT_HOST "localhost
+#define DEFAULT_HOST "localhost"
 #define DEFAULT_DB_PATH "data/messagerie.db"
 
 typedef struct {
@@ -22,6 +22,7 @@ typedef struct {
     char db_path[512];
     char server_cert_path[512];
     char server_key_path[512];
+		char db_encryption_key[256];
 } AppConfig;
 
 /**

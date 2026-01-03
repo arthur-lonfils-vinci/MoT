@@ -16,6 +16,7 @@
 #include "system/storage.h"
 #include "system/logger.h"
 #include "system/config_loader.h"
+#include "system/crypto.h"
 
 // Infrastructure
 #include "infrastructure/server_types.h"
@@ -46,6 +47,16 @@ int main()
 	{
 		log_print(LOG_INFO, "No server.conf found, using defaults (Port: %d)", config.port);
 	}
+
+	if (strlen(config.db_encryption_key) > 0) {
+        crypto_init(config.db_encryption_key);
+        log_print(LOG_INFO, "Database encryption enabled.");
+    } else {
+        log_print(LOG_WARN, "NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured");
+				printf("NO DB KEY FOUND! Please set a Crypt Key for the stored data to be secured\n");
+        // Optional: Exit if security is strict requirements
+				return -1;
+    }
 
 	// 2. Initialize OpenSSL
 	init_openssl();
@@ -231,6 +242,7 @@ int main()
 	}
 
 	// Cleanup
+	free_clients();
 	cleanup_openssl();
 	storage_close();
 	log_close();

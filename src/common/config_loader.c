@@ -9,86 +9,119 @@
 #include "system/logger.h"
 
 // Helper: Trim leading/trailing whitespace
-static char *trim_whitespace(char *str) {
-    char *end;
-    while(isspace((unsigned char)*str)) str++;
-    if(*str == 0) return str;
-    end = str + strlen(str) - 1;
-    while(end > str && isspace((unsigned char)*end)) end--;
-    *(end+1) = 0;
-    return str;
+static char *trim_whitespace(char *str)
+{
+	char *end;
+	while (isspace((unsigned char)*str))
+		str++;
+	if (*str == 0)
+		return str;
+	end = str + strlen(str) - 1;
+	while (end > str && isspace((unsigned char)*end))
+		end--;
+	*(end + 1) = 0;
+	return str;
 }
 
-void config_get_client_path(char *buffer, size_t size) {
-    const char *home = getenv("HOME");
-    if (!home) {
-        struct passwd *pw = getpwuid(getuid());
-        if (pw) home = pw->pw_dir;
-    }
-    if (!home) home = "."; // Fallback
-    
-    snprintf(buffer, size, "%s/.mot/config.conf", home);
+void config_get_client_path(char *buffer, size_t size)
+{
+	const char *home = getenv("HOME");
+	if (!home)
+	{
+		struct passwd *pw = getpwuid(getuid());
+		if (pw)
+			home = pw->pw_dir;
+	}
+	if (!home)
+		home = "."; // Fallback
+
+	snprintf(buffer, size, "%s/.mot/config.conf", home);
 }
 
-void apply_defaults(AppConfig *config) {
-    config->port = DEFAULT_PORT;
-    strncpy(config->server_host, DEFAULT_HOST, sizeof(config->server_host) - 1);
-    config->ca_cert_path[0] = '\0';
-    
-    strncpy(config->db_path, DEFAULT_DB_PATH, sizeof(config->db_path) - 1);
-    strncpy(config->server_cert_path, "server.crt", sizeof(config->server_cert_path) - 1);
-    strncpy(config->server_key_path, "server.key", sizeof(config->server_key_path) - 1);
+void apply_defaults(AppConfig *config)
+{
+	config->port = DEFAULT_PORT;
+	strncpy(config->server_host, DEFAULT_HOST, sizeof(config->server_host) - 1);
+	config->ca_cert_path[0] = '\0';
+	config->db_encryption_key[0] = '\0';
+
+	strncpy(config->db_path, DEFAULT_DB_PATH, sizeof(config->db_path) - 1);
+	strncpy(config->server_cert_path, "server.crt", sizeof(config->server_cert_path) - 1);
+	strncpy(config->server_key_path, "server.key", sizeof(config->server_key_path) - 1);
 }
 
-int config_load(const char *path, AppConfig *config) {
-    apply_defaults(config);
+int config_load(const char *path, AppConfig *config)
+{
+	apply_defaults(config);
 
-    FILE *f = fopen(path, "r");
-    if (!f) return 0; // File not found, using defaults
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return 0; // File not found, using defaults
 
-    char line[1024];
-    while (fgets(line, sizeof(line), f)) {
-        char *p = line;
-        // Skip comments and empty lines
-        while (isspace((unsigned char)*p)) p++;
-        if (*p == '\0' || *p == '#') continue;
+	char line[1024];
+	while (fgets(line, sizeof(line), f))
+	{
+		char *p = line;
+		// Skip comments and empty lines
+		while (isspace((unsigned char)*p))
+			p++;
+		if (*p == '\0' || *p == '#')
+			continue;
 
-        char *key = strtok(p, "=");
-        char *val = strtok(NULL, "\n");
+		char *key = strtok(p, "=");
+		char *val = strtok(NULL, "\n");
 
-        if (key && val) {
-            key = trim_whitespace(key);
-            val = trim_whitespace(val);
+		if (key && val)
+		{
+			key = trim_whitespace(key);
+			val = trim_whitespace(val);
 
-            if (strcmp(key, "server_host") == 0) {
-                strncpy(config->server_host, val, sizeof(config->server_host) - 1);
-            } else if (strcmp(key, "server_port") == 0 || strcmp(key, "bind_port") == 0) {
-                config->port = atoi(val);
-            } else if (strcmp(key, "ca_path") == 0) {
-                strncpy(config->ca_cert_path, val, sizeof(config->ca_cert_path) - 1);
-            } else if (strcmp(key, "db_path") == 0) {
-                strncpy(config->db_path, val, sizeof(config->db_path) - 1);
-            } else if (strcmp(key, "cert_file") == 0) {
-                strncpy(config->server_cert_path, val, sizeof(config->server_cert_path) - 1);
-            } else if (strcmp(key, "key_file") == 0) {
-                strncpy(config->server_key_path, val, sizeof(config->server_key_path) - 1);
-            }
-        }
-    }
-    fclose(f);
-    return 1;
+			if (strcmp(key, "server_host") == 0)
+			{
+				strncpy(config->server_host, val, sizeof(config->server_host) - 1);
+			}
+			else if (strcmp(key, "server_port") == 0 || strcmp(key, "bind_port") == 0)
+			{
+				config->port = atoi(val);
+			}
+			else if (strcmp(key, "ca_path") == 0)
+			{
+				strncpy(config->ca_cert_path, val, sizeof(config->ca_cert_path) - 1);
+			}
+			else if (strcmp(key, "db_path") == 0)
+			{
+				strncpy(config->db_path, val, sizeof(config->db_path) - 1);
+			}
+			else if (strcmp(key, "cert_file") == 0)
+			{
+				strncpy(config->server_cert_path, val, sizeof(config->server_cert_path) - 1);
+			}
+			else if (strcmp(key, "key_file") == 0)
+			{
+				strncpy(config->server_key_path, val, sizeof(config->server_key_path) - 1);
+			}
+			else if (strcmp(key, "db_key") == 0)
+			{
+				strncpy(config->db_encryption_key, val, sizeof(config->db_encryption_key) - 1);
+			}
+		}
+	}
+	fclose(f);
+	return 1;
 }
 
-int config_save_client(const char *path, const AppConfig *config) {
-    FILE *f = fopen(path, "w");
-    if (!f) return 0;
+int config_save_client(const char *path, const AppConfig *config)
+{
+	FILE *f = fopen(path, "w");
+	if (!f)
+		return 0;
 
-    fprintf(f, "# MoT Client Configuration\n");
-    fprintf(f, "# Generated by First Run Wizard\n\n");
-    fprintf(f, "server_host=%s\n", config->server_host);
-    fprintf(f, "server_port=%d\n", config->port);
-    fprintf(f, "# ca_path=/path/to/custom_server.crt\n");
+	fprintf(f, "# MoT Client Configuration\n");
+	fprintf(f, "# Generated by First Run Wizard\n\n");
+	fprintf(f, "server_host=%s\n", config->server_host);
+	fprintf(f, "server_port=%d\n", config->port);
+	fprintf(f, "# ca_path=/path/to/custom_server.crt\n");
 
-    fclose(f);
-    return 1;
+	fclose(f);
+	return 1;
 }
