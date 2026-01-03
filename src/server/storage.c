@@ -12,13 +12,13 @@
 // System
 #include "system/crypto.h"
 #include "system/storage.h"
+#include "system/logger.h"
 
 static sqlite3 *db = NULL;
 
 void generate_random_salt(char *buffer)
 {
 	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
-	// Format: $6$rounds=5000$ + 16 chars of salt
 	strcpy(buffer, "$6$rounds=5000$");
 	int base_len = strlen(buffer);
 
@@ -52,9 +52,12 @@ int storage_init(const char *db_path)
 
 	if (sqlite3_open(db_path, &db) != SQLITE_OK)
 	{
-		fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+		log_print(LOG_ERROR, "Cannot open database: %s", sqlite3_errmsg(db));
 		return 0;
 	}
+
+	// Enable WAL mode for better concurrency
+	sqlite3_exec(db, "PRAGMA journal_mode=WAL;", 0, 0, 0);
 
 	const char *schema =
 			"CREATE TABLE IF NOT EXISTS users ("
@@ -90,7 +93,7 @@ int storage_init(const char *db_path)
 	char *err_msg = 0;
 	if (sqlite3_exec(db, schema, 0, 0, &err_msg) != SQLITE_OK)
 	{
-		fprintf(stderr, "SQL Error: %s\n", err_msg);
+		log_print(LOG_ERROR, "SQL Schema Error: %s", err_msg);
 		sqlite3_free(err_msg);
 		return 0;
 	}
@@ -100,24 +103,19 @@ int storage_init(const char *db_path)
 
 void storage_backup(const char *db_path)
 {
-	// 1. Create backups directory
 	ensure_directory("data");
 	ensure_directory("data/backups");
 
-	// 2. Open Source
 	FILE *src = fopen(db_path, "rb");
 	if (!src)
-		return; // No DB to backup yet (first run)
+		return;
 
-	// 3. Generate Destination Filename with Date
 	time_t now = time(NULL);
 	struct tm *t = localtime(&now);
 	char dest_path[256];
-	// e.g., data/backups/messagerie_2024-05-20.db
 	snprintf(dest_path, sizeof(dest_path), "data/backups/messagerie_%04d-%02d-%02d.db",
 					 t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
 
-	// 4. Copy File
 	FILE *dst = fopen(dest_path, "wb");
 	if (dst)
 	{
@@ -128,13 +126,12 @@ void storage_backup(const char *db_path)
 			fwrite(buffer, 1, n, dst);
 		}
 		fclose(dst);
-		printf("[Storage] Database backed up to %s\n", dest_path);
+		log_print(LOG_INFO, "Database backed up to %s", dest_path);
 	}
 	else
 	{
-		fprintf(stderr, "[Storage] Failed to create backup file %s\n", dest_path);
+		log_print(LOG_ERROR, "Failed to create backup file %s", dest_path);
 	}
-
 	fclose(src);
 }
 
@@ -237,8 +234,6 @@ int storage_update_user(uint32_t uid, const char *new_username, const char *new_
 	return 1;
 }
 
-// --- LOOKUPS ---
-
 int storage_get_uid_by_code(const char *code, uint32_t *uid_out)
 {
 	const char *sql = "SELECT uid FROM users WHERE friend_code = ?";
@@ -276,8 +271,6 @@ int storage_get_user_by_uid(uint32_t uid, User *user_out)
 	sqlite3_finalize(stmt);
 	return res;
 }
-
-// --- CONTACTS ---
 
 int storage_add_request(uint32_t from_uid, uint32_t to_uid)
 {
@@ -336,7 +329,7 @@ int storage_get_contacts_data(uint32_t uid, ContactSummary *out_array, int max_c
 	{
 		out_array[count].uid = sqlite3_column_int(stmt, 0);
 		strncpy(out_array[count].username, (char *)sqlite3_column_text(stmt, 1), MAX_NAME_LEN);
-		out_array[count].is_online = 0; // Can be linked to Client list later
+		out_array[count].is_online = 0;
 		count++;
 	}
 	sqlite3_finalize(stmt);
@@ -364,12 +357,8 @@ int storage_get_requests_data(uint32_t uid, ContactSummary *out_array, int max_c
 	return count;
 }
 
-// --- CONVERSATIONS ---
-
-// Check if a private conversation already exists between two users
 uint32_t storage_find_private_conversation(uint32_t uid_a, uint32_t uid_b)
 {
-	// Logic: Find a conv_id of type 0 where both UIDs are participants
 	const char *sql =
 			"SELECT c.conv_id FROM conversations c "
 			"JOIN participants p1 ON c.conv_id = p1.conv_id "
@@ -448,10 +437,8 @@ int storage_get_user_conversations(uint32_t uid, ConversationSummary *out_array,
 		out_array[count].my_role = (uint8_t)sqlite3_column_int(stmt, 4);
 		out_array[count].unread_count = 0;
 
-		// DYNAMIC NAMING
 		if (type == 0)
-		{ // Private
-			// Find the 'other' participant
+		{
 			const char *sql_other = "SELECT u.username FROM participants p JOIN users u ON p.user_id = u.uid WHERE p.conv_id = ? AND p.user_id != ?";
 			sqlite3_stmt *stmt2;
 			sqlite3_prepare_v2(db, sql_other, -1, &stmt2, 0);
@@ -468,11 +455,10 @@ int storage_get_user_conversations(uint32_t uid, ConversationSummary *out_array,
 				strcpy(out_array[count].name, "Private Chat");
 			}
 			sqlite3_finalize(stmt2);
-			out_array[count].description[0] = '\0'; // No desc for private
+			out_array[count].description[0] = '\0';
 		}
 		else
 		{
-			// Group: Use stored name
 			strncpy(out_array[count].name, (char *)sqlite3_column_text(stmt, 2), 32);
 			const char *desc = (char *)sqlite3_column_text(stmt, 3);
 			if (desc)
@@ -506,22 +492,43 @@ int storage_get_conv_participants(uint32_t conv_id, uint32_t *out_uids, int max_
 
 void storage_log_message(uint32_t conv_id, uint32_t sender_uid, const char *text)
 {
-
 	char *encrypted_text = crypto_encrypt(text);
 	if (!encrypted_text)
+	{
+		log_print(LOG_ERROR, "Encryption failed for message (UID: %d)", sender_uid);
 		return;
+	}
 
 	const char *sql = "INSERT INTO messages (conv_id, sender_id, text, timestamp) VALUES (?, ?, ?, ?)";
 	sqlite3_stmt *stmt;
+
 	if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK)
 	{
 		sqlite3_bind_int(stmt, 1, conv_id);
 		sqlite3_bind_int(stmt, 2, sender_uid);
-		sqlite3_bind_text(stmt, 3, encrypted_text, -1, SQLITE_STATIC);
+
+		// Use SQLITE_TRANSIENT because encrypted_text is freed at the end
+		sqlite3_bind_text(stmt, 3, encrypted_text, -1, SQLITE_TRANSIENT);
+
 		sqlite3_bind_int64(stmt, 4, time(NULL));
-		sqlite3_step(stmt);
+
+		if (sqlite3_step(stmt) != SQLITE_DONE)
+		{
+			log_print(LOG_ERROR, "DB Insert Message Failed: %s", sqlite3_errmsg(db));
+		}
+		else
+		{
+			// Debug success
+			// log_print(LOG_DEBUG, "Message logged to DB");
+		}
+
 		sqlite3_finalize(stmt);
 	}
+	else
+	{
+		log_print(LOG_ERROR, "DB Prepare Message Failed: %s", sqlite3_errmsg(db));
+	}
+
 	free(encrypted_text);
 }
 
@@ -536,7 +543,10 @@ char *storage_get_history(uint32_t conv_id)
 
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+	{
+		log_print(LOG_ERROR, "DB Prepare History Failed: %s", sqlite3_errmsg(db));
 		return strdup("");
+	}
 
 	sqlite3_bind_int(stmt, 1, conv_id);
 
@@ -546,6 +556,8 @@ char *storage_get_history(uint32_t conv_id)
 		const char *enc_text = (const char *)sqlite3_column_text(stmt, 1);
 
 		char *decrypted_text = crypto_decrypt(enc_text);
+		if (!decrypted_text)
+			decrypted_text = strdup("[Error Decrypting]");
 
 		time_t rawtime = (time_t)sqlite3_column_int64(stmt, 2);
 		struct tm *t = localtime(&rawtime);
@@ -553,20 +565,24 @@ char *storage_get_history(uint32_t conv_id)
 		char line_header[64];
 		snprintf(line_header, sizeof(line_header), "[%02d:%02d] %s: ", t->tm_hour, t->tm_min, user);
 
-		size_t line_len = strlen(line_header) + strlen(decrypted_text) + 2; // +1 for \n, +1 for null (temp)
+		// Calculate exact length of the new line: "Header" + "Text" + "\n" + "\0"
+		size_t msg_len = strlen(line_header) + strlen(decrypted_text) + 1; // +1 for '\n'
 
-		char *new_buf = realloc(buf, len + line_len + 1);
+		// New total size: current len + new msg + 1 for final null terminator
+		char *new_buf = realloc(buf, len + msg_len + 1);
 		if (!new_buf)
 		{
-			// Allocation failed, stop here and return what we have
+			free(decrypted_text);
 			break;
 		}
 
 		buf = new_buf;
 
-		// Append
+		// Append to the end of the buffer (overwriting the previous null terminator)
 		sprintf(buf + len, "%s%s\n", line_header, decrypted_text);
-		len += line_len;
+
+		// Increment length by the actual characters written (excluding the new null terminator)
+		len += msg_len;
 
 		free(decrypted_text);
 	}
@@ -609,7 +625,6 @@ int storage_update_group(uint32_t conv_id, const char *name, const char *desc)
 
 int storage_add_participant(uint32_t conv_id, uint32_t uid, int role)
 {
-	// Check if exists first to avoid PK error? Or just use INSERT OR IGNORE
 	const char *sql = "INSERT OR IGNORE INTO participants (conv_id, user_id, role) VALUES (?, ?, ?)";
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -659,7 +674,6 @@ int storage_remove_participant(uint32_t conv_id, uint32_t uid)
 
 int storage_delete_conversation(uint32_t conv_id)
 {
-	// Transactional delete recommended, but simple sequential for now
 	char *sql[] = {
 			"DELETE FROM messages WHERE conv_id = ?",
 			"DELETE FROM participants WHERE conv_id = ?",

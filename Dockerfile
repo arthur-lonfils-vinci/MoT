@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     libncurses5-dev \
     libncursesw5-dev \
     libssl-dev \
+		libnotify-dev \
     libsqlite3-dev
 
 WORKDIR /app
@@ -31,6 +32,7 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     openssl \
     ca-certificates \
+		libnotify-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

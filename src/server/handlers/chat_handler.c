@@ -45,6 +45,7 @@ void handle_req_history(Client *cli, const RequestHistoryPayload *p)
 	}
 	else
 	{
+		log_print(LOG_DEBUG, "History for conv %s is empty", p->conv_id);
 		// Send empty history if null
 		send_packet(cli->ssl, MSG_RESP_HISTORY, "", 0);
 	}

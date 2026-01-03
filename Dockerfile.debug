@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     openssl \
     ca-certificates \
     valgrind \
+		libnotify-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

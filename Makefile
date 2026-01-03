@@ -1,9 +1,21 @@
 # Compiler and Flags
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -Iinclude -g
+
+NOTIFY_FLAGS := $(shell pkg-config --cflags libnotify 2>/dev/null)
+NOTIFY_LIBS   := $(shell pkg-config --libs libnotify 2>/dev/null)
+
+# Fallback/Debug: If pkg-config fails, try to set minimal defaults or warn
+ifeq ($(NOTIFY_LIBS),)
+    $(warning "⚠️  pkg-config could not find libnotify. Ensure libnotify-dev is installed.")
+    # Attempt to force flags if you know it's installed but pkg-config is broken:
+    # NOTIFY_CFLAGS = -I/usr/include/gdk-pixbuf-2.0 -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include
+    # NOTIFY_LIBS   = -lnotify -lgobject-2.0 -lglib-2.0
+endif
+
+CFLAGS = -Wall -Wextra -Werror -Iinclude -g -D_XOPEN_SOURCE=700 -D_DEFAULT_SOURCE $(NOTIFY_FLAGS)
 
 # Standard Dynamic Linking (for development/local use)
-LDFLAGS = -lncurses -lssl -lcrypto
+LDFLAGS = -lncurses -lssl -lcrypto -lncurses -lpthread $(NOTIFY_LIBS)
 SERVER_LDFLAGS = -lsqlite3 -lcrypt -lssl -lcrypto
 
 # --- STATIC BUILD CONFIGURATION ---
@@ -12,7 +24,7 @@ SERVER_LDFLAGS = -lsqlite3 -lcrypt -lssl -lcrypto
 # -ltinfo: Often required by ncurses when linking statically
 # -lpthread: Explicitly required for static threading
 # -ldl: Sometimes needed for system calls
-STATIC_LDFLAGS = -static -lncurses -ltinfo -lssl -lcrypto -lpthread -lc
+STATIC_LDFLAGS = -static -lncurses -ltinfo -lssl -lcrypto -lpthread -lc $(NOTIFY_LIBS)
 
 # Directories
 SRC_DIR = src

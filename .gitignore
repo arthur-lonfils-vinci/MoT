@@ -36,3 +36,7 @@ scripts/*.tmp
 # env
 .env*
 !.env.template
+
+# other
+server_data
+server_logs

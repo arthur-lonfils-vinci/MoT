@@ -17,41 +17,46 @@
  */
 typedef struct AppState
 {
-    int sock_fd;        /**< Raw socket file descriptor */
-    SSL *ssl;           /**< OpenSSL Connection Handle */
-    SSL_CTX *ctx;       /**< OpenSSL Global Context */
+	int sock_fd;	/**< Raw socket file descriptor */
+	SSL *ssl;			/**< OpenSSL Connection Handle */
+	SSL_CTX *ctx; /**< OpenSSL Global Context */
 
-    UIState current_state; /**< Current screen being displayed */
-    int needs_redraw;      /**< Flag: 1 if UI needs refreshing */
+	UIState current_state; /**< Current screen being displayed */
+	int needs_redraw;			 /**< Flag: 1 if UI needs refreshing */
 
-    // Identity
-    MyInfoPayload my_info;
+	// Identity
+	MyInfoPayload my_info;
 
-    // --- Dynamic Data Stores ---
-    ContactSummary *contacts;
-    int contacts_count;
+	// --- Dynamic Data Stores ---
+	ContactSummary *contacts;
+	int contacts_count;
 
-    ContactSummary *requests;
-    int requests_count;
+	ContactSummary *requests;
+	int requests_count;
 
-    ConversationSummary *conversations;
-    int conv_count;
+	ConversationSummary *conversations;
+	int conv_count;
 
-    GroupMemberSummary *current_group_members;
-    int current_group_members_count;
-    int member_selection_idx;
+	GroupMemberSummary *current_group_members;
+	int current_group_members_count;
+	int member_selection_idx;
 
-    // --- Active Chat State ---
-    uint32_t current_conv_id;
-    char current_conv_name[32];
+	// --- Active Chat State ---
+	uint32_t current_conv_id;
+	char current_conv_name[32];
 
-    char *chat_history;      /**< Dynamic string buffer for chat history */
-    size_t chat_history_len; 
+	char *chat_history; /**< Dynamic string buffer for chat history */
+	size_t chat_history_len;
 
-    char chat_input_buffer[MAX_TEXT_LEN];
+	char chat_input_buffer[MAX_TEXT_LEN];
 
-    // Thread Safety
-    pthread_mutex_t state_lock; /**< Protects access to all fields above */
+	// Notification State
+	int pending_notify;
+	char notify_title[64];
+	char notify_msg[128];
+
+	// Thread Safety
+	pthread_mutex_t state_lock; /**< Protects access to all fields above */
 } AppState;
 
 extern AppState app;
